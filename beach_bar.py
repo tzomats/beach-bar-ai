@@ -20,16 +20,12 @@ def init_db():
     # Πίνακας Συνομιλιών (Logs)
     c.execute('''CREATE TABLE IF NOT EXISTS messages 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, umbrella TEXT, sender TEXT, text TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    # Πίνακας για το Μενού (ΑΠΛΗ ΜΟΡΦΗ)
+    c.execute('''CREATE TABLE IF NOT EXISTS menu 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL, category TEXT)''')
     conn.commit()
     conn.close()
-    # Πίνακας για το Μενού
-    c.execute('''CREATE TABLE IF NOT EXISTS menu 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  name TEXT NOT NULL, 
-                  price REAL NOT NULL, 
-                  category TEXT, 
-                  image_url TEXT)''')
-
+    
 init_db()
 
 @app.route('/')
@@ -123,6 +119,33 @@ def delete_order(order_id):
     conn.close()
     return jsonify({"status": "success"})
 
+@app.route('/admin-menu', methods=['GET', 'POST'])
+def admin_menu():
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    
+    if request.method == 'POST':
+        name = request.form.get('name')
+        price = request.form.get('price')
+        category = request.form.get('category')
+        c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (name, price, category))
+        conn.commit()
+    
+    c.execute("SELECT id, name, price, category FROM menu ORDER BY category")
+    items = c.fetchall()
+    conn.close()
+    return render_template('admin_menu.html', items=items)
+
+@app.route('/delete-menu/<int:item_id>', methods=['POST'])
+def delete_menu(item_id):
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM menu WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "success"})
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
