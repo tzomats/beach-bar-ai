@@ -22,6 +22,13 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, umbrella TEXT, sender TEXT, text TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     conn.commit()
     conn.close()
+    # Πίνακας για το Μενού
+    c.execute('''CREATE TABLE IF NOT EXISTS menu 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  name TEXT NOT NULL, 
+                  price REAL NOT NULL, 
+                  category TEXT, 
+                  image_url TEXT)''')
 
 init_db()
 
@@ -118,3 +125,4 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
