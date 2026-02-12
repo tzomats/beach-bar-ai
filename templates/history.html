@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ιστορικό Παραγγελιών</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; color: #333; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #001f3f; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .summary { margin-bottom: 20px; font-size: 1.2em; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>📊 Στατιστικά & Ιστορικό Παραγγελιών</h1>
+    <div class="summary">Σύνολο Παραγγελιών στη βάση: {{ data_list|length }}</div>
+    
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Ώρα</th>
+            <th>Ομπρέλα</th>
+            <th>Προϊόντα</th>
+        </tr>
+        {% for o in data_list %}
+        <tr>
+            <td>#{{ o.id }}</td>
+            <td>{{ o.time }}</td>
+            <td><b>{{ o.umbrella_number }}</b></td>
+            <td>
+                {% for p in o.products_list %}
+                    {{ p.qty }} x {{ p.name }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <br>
+    <a href="/">Επιστροφή στο Dashboard</a>
+</body>
+</html>
