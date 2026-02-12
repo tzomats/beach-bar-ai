@@ -14,7 +14,6 @@ URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generate
 def init_db():
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    # Πίνακας για τις παραγγελίες
     c.execute('''CREATE TABLE IF NOT EXISTS orders 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   content TEXT, 
@@ -28,12 +27,9 @@ init_db()
 def index():
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    # Παίρνουμε όλες τις παραγγελίες, τις πιο πρόσφατες πάνω-πάνω
     c.execute("SELECT content FROM orders ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
-    
-    # Μετατρέπουμε το κείμενο από τη βάση πάλι σε λίστα αντικειμένων
     beach_orders_list = [json.loads(row[0]) for row in rows]
     return render_template('dashboard.html', data_list=beach_orders_list)
 
@@ -66,7 +62,6 @@ def chat():
             
             if json_part:
                 order_data = json.loads(json_part.group())
-                # ΑΠΟΘΗΚΕΥΣΗ ΣΤΗ ΒΑΣΗ
                 conn = sqlite3.connect('orders.db')
                 c = conn.cursor()
                 c.execute("INSERT INTO orders (content) VALUES (?)", (json.dumps(order_data),))
@@ -79,14 +74,11 @@ def chat():
     except Exception as e:
         return jsonify({"reply": "Με συγχωρείτε, είχαμε μια μικρή διακοπή. Μπορείτε να επαναλάβετε;"})
 
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=False)
-
-	@app.route('/owner-history')
+# --- Η ΔΙΑΔΡΟΜΗ ΓΙΑ ΤΟ ΙΣΤΟΡΙΚΟ (ΜΠΗΚΕ ΣΤΗ ΣΩΣΤΗ ΘΕΣΗ) ---
+@app.route('/owner-history')
 def owner_history():
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    # Παίρνουμε id, content ΚΑΙ το timestamp (πότε έγινε η παραγγελία)
     c.execute("SELECT id, content, timestamp FROM orders ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
@@ -95,8 +87,11 @@ def owner_history():
     for row in rows:
         order = json.loads(row[1])
         order['id'] = row[0]
-        order['time'] = row[2] # Η ώρα από τη βάση
+        order['time'] = row[2]
         history_list.append(order)
         
     return render_template('history.html', data_list=history_list)
 
+# --- ΤΕΛΕΥΤΑΙΑ ΓΡΑΜΜΗ ΤΟΥ ΑΡΧΕΙΟΥ ---
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000, debug=False)
