@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Logs Συνομιλιών</title></head>
+<body>
+    <h1>Ιστορικό Συνομιλιών</h1>
+    <table border="1">
+        <tr><th>Ομπρέλα</th><th>Από</th><th>Μήνυμα</th><th>Ώρα</th></tr>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log[0] if logs|length > 0 and log|length == 4 else "" }}</td>
+            <td>{{ log[0] if log|length == 3 else log[1] }}</td>
+            <td>{{ log[1] if log|length == 3 else log[2] }}</td>
+            <td>{{ log[2] if log|length == 3 else log[3] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
