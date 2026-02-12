@@ -3,6 +3,9 @@ import requests
 import json
 import re
 import sqlite3
+import base64
+from io import BytesIO
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -144,8 +147,63 @@ def delete_menu(item_id):
     conn.commit()
     conn.close()
     return jsonify({"status": "success"})
+    
+# ---ισως τα απο πανω να θελουν σβησημο  ---
+# --- κωδικας για να περανει το μενου με φωτο ---
+
+@app.route('/upload-menu-photo', methods=['POST'])
+def upload_menu_photo():
+    if 'photo' not in request.files:
+        return jsonify({"error": "No photo uploaded"}), 400
+    
+    file = request.files['photo']
+    image = Image.open(file)
+    
+    # Μετατροπή εικόνας σε Base64 για να τη στείλουμε στο Gemini
+    buffered = BytesIO()
+    image.save(buffered, format="JPEG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+
+    # Το Prompt προς το AI για να μας δώσει καθαρά δεδομένα
+    prompt = (
+        "Ανάλυσε αυτή τη φωτογραφία καταλόγου και επέστρεψε ΜΟΝΟ ένα JSON array "
+        "με αντικείμενα που έχουν κλειδιά 'name', 'price', 'category'. "
+        "Μην γράψεις τίποτα άλλο εκτός από το JSON."
+    )
+
+    # Αίτημα στο Gemini Vision
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "image/jpeg", "data": img_str}}
+            ]
+        }]
+    }
+
+    try:
+        resp = requests.post(URL, json=payload)
+        ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        
+        # Καθαρισμός του κειμένου από τυχόν markdown (```json ... ```)
+        clean_json = re.search(r'\[.*\]', ai_data, re.DOTALL).group()
+        menu_items = json.loads(clean_json)
+
+        # Αποθήκευση στη βάση δεδομένων
+        conn = sqlite3.connect('orders.db')
+        c = conn.cursor()
+        for item in menu_items:
+            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
+                      (item['name'], item['price'], item['category']))
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "success", "items_added": len(menu_items)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
