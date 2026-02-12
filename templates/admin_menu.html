@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Διαχείριση Μενού</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+        input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #28a745; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #218838; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        .del-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Προσθήκη Προϊόντος</h1>
+    
+    <form method="POST">
+        <input type="text" name="name" placeholder="Όνομα προϊόντος (π.χ. Freddo Espresso)" required>
+        <input type="number" name="price" step="0.1" placeholder="Τιμή (π.χ. 4.5)" required>
+        <select name="category">
+            <option value="Καφέδες">Καφέδες</option>
+            <option value="Ποτά">Ποτά</option>
+            <option value="Αναψυκτικά">Αναψυκτικά</option>
+            <option value="Φαγητά">Φαγητά</option>
+        </select>
+        <button type="submit">Προσθήκη στο Μενού</button>
+    </form>
+
+    <hr>
+
+    <h1>Υπάρχον Μενού</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Προϊόν</th>
+                <th>Τιμή</th>
+                <th>Κατηγορία</th>
+                <th>Ενέργεια</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item[1] }}</td>
+                <td>{{ item[2] }}€</td>
+                <td>{{ item[3] }}</td>
+                <td>
+                    <button class="del-btn" onclick="deleteItem({{ item[0] }})">Διαγραφή</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function deleteItem(id) {
+        if(confirm('Σίγουρα διαγραφή;')) {
+            fetch('/delete-menu/' + id, { method: 'POST' })
+            .then(() => location.reload());
+        }
+    }
+</script>
+
+</body>
+</html>
