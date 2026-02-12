@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import json
 import re
+import sqlite3
 
 app = Flask(__name__)
 
@@ -9,24 +10,40 @@ API_KEY = "AIzaSyCu6l9azuUcex5x02gX8nCUr9ZIbq2JccM"
 MODEL = "gemini-3-flash-preview"
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
-beach_orders_list = []
+# --- ΡΥΘΜΙΣΗ ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ ---
+def init_db():
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    # Πίνακας για τις παραγγελίες
+    c.execute('''CREATE TABLE IF NOT EXISTS orders 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  content TEXT, 
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    conn.commit()
+    conn.close()
 
-
+init_db()
 
 @app.route('/')
-def index(): 
-    # Εδώ καλούμε το dashboard.html που έφτιαξες στον φάκελο templates
+def index():
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    # Παίρνουμε όλες τις παραγγελίες, τις πιο πρόσφατες πάνω-πάνω
+    c.execute("SELECT content FROM orders ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    
+    # Μετατρέπουμε το κείμενο από τη βάση πάλι σε λίστα αντικειμένων
+    beach_orders_list = [json.loads(row[0]) for row in rows]
     return render_template('dashboard.html', data_list=beach_orders_list)
 
 @app.route('/client')
-def client(): 
+def client():
     return render_template('client.html')
 
 @app.route('/chat', methods=['POST'])
 def chat():
     user_text = request.json.get('text', '')
-    
-    # Το μυστικό Prompt: Το AI πρέπει να απαντάει ευγενικά ΚΑΙ να βάζει το JSON κρυφά αν υπάρχει παραγγελία
     system_instruction = (
         "Είσαι ένας ευγενικός σερβιτόρος σε beach bar στην Ελλάδα. "
         "Απάντησε στον πελάτη σύντομα και φιλικά. "
@@ -42,7 +59,6 @@ def chat():
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
         ai_full_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
         
-        # Διαχωρισμός της απάντησης από το κρυφό JSON
         if "ORDER_JSON" in ai_full_reply:
             parts = ai_full_reply.split("ORDER_JSON")
             visible_reply = parts[0].strip()
@@ -50,12 +66,17 @@ def chat():
             
             if json_part:
                 order_data = json.loads(json_part.group())
-                beach_orders_list.insert(0, order_data) # Στέλνουμε την παραγγελία στο Bar
+                # ΑΠΟΘΗΚΕΥΣΗ ΣΤΗ ΒΑΣΗ
+                conn = sqlite3.connect('orders.db')
+                c = conn.cursor()
+                c.execute("INSERT INTO orders (content) VALUES (?)", (json.dumps(order_data),))
+                conn.commit()
+                conn.close()
         else:
             visible_reply = ai_full_reply
 
         return jsonify({"reply": visible_reply})
-    except:
+    except Exception as e:
         return jsonify({"reply": "Με συγχωρείτε, είχαμε μια μικρή διακοπή. Μπορείτε να επαναλάβετε;"})
 
 if __name__ == "__main__":
