@@ -1,5 +1,3 @@
-// εδω ειναι ο κωδικας που δουλευε οταν ανεβασαμε στο ρεντερ κ με την βαση.
-
 from flask import Flask, render_template, request, jsonify
 import requests
 import json
@@ -83,24 +81,3 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)
-	
-	//μετα προσθεσαμε αυτο για να βλεπουμε το ιστορικο 
-	
-	@app.route('/owner-history')
-def owner_history():
-    conn = sqlite3.connect('orders.db')
-    c = conn.cursor()
-    # Παίρνουμε id, content ΚΑΙ το timestamp (πότε έγινε η παραγγελία)
-    c.execute("SELECT id, content, timestamp FROM orders ORDER BY id DESC")
-    rows = c.fetchall()
-    conn.close()
-    
-    history_list = []
-    for row in rows:
-        order = json.loads(row[1])
-        order['id'] = row[0]
-        order['time'] = row[2] # Η ώρα από τη βάση
-        history_list.append(order)
-        
-    return render_template('history.html', data_list=history_list)
-
