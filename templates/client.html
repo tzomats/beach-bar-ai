@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beach Chatbot</title>
+    <style>
+    html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Απαγορεύει το κούνημα όλης της σελίδας */
+    }
+
+    body { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        background-color: #e5ddd5; 
+        background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+        display: flex; 
+        flex-direction: column; 
+    }
+    
+    .header { 
+        height: 60px; /* Σταθερό ύψος */
+        background: #075e54; 
+        color: white; 
+        padding: 0 15px; 
+        display: flex; 
+        align-items: center; 
+        gap: 10px;
+        font-weight: bold; 
+        z-index: 10;
+    }
+    
+    #chat-box { 
+        flex: 1; /* Παίρνει όλο τον διαθέσιμο χώρο ανάμεσα σε header και input */
+        overflow-y: auto; 
+        padding: 15px; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 5px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .input-area { 
+        height: 70px; /* Σταθερό ύψος για να μην κρύβεται */
+        background: #f0f0f0; 
+        padding: 10px 15px; 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+        border-top: 1px solid #ddd;
+        box-sizing: border-box;
+    }
+
+    input { 
+        flex: 1; 
+        border-radius: 25px; 
+        border: none; 
+        padding: 10px 15px; 
+        outline: none; 
+        font-size: 16px; /* 16px για να μην κάνει αυτόματο zoom το iPhone */
+    }
+
+    button { 
+        background: #075e54; 
+        color: white; 
+        border: none; 
+        width: 40px; 
+        height: 40px; 
+        border-radius: 50%; 
+        font-size: 18px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    /* Μηνύματα στυλ WhatsApp */
+    .msg { max-width: 80%; padding: 8px 12px; border-radius: 10px; margin-bottom: 5px; position: relative; font-size: 15px; }
+    .user { align-self: flex-end; background: #dcf8c6; border-radius: 10px 0 10px 10px; }
+    .ai { align-self: flex-start; background: white; border-radius: 0 10px 10px 10px; }
+
+    .dots:after { content: ' .'; animation: dots 1.5s steps(5, end) infinite; }
+    @keyframes dots { 0%, 20% { content: ' .'; } 40% { content: ' . .'; } 60% { content: ' . . .'; } 80%, 100% { content: ''; } }
+</style>
+</head>
+<body>
+    <div style="background: #075e54; color: white; padding: 15px; text-align: center; font-weight: bold;">🍹 Beach AI Assistant</div>
+    <div id="chat-box">
+        <div class="msg ai">Γεια σας! Είμαι ο ψηφιακός σας σερβιτόρος. Τι θα θέλατε να παραγγείλετε; (Μην ξεχάσετε τον αριθμό ομπρέλας!)</div>
+    </div>
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="Γράψε εδώ...">
+        <button onclick="sendMessage()">Στείλε</button>
+    </div>
+
+    <script>
+        function sendMessage() {
+    let input = document.getElementById('userInput');
+    let text = input.value;
+    if(!text) return;
+
+    let box = document.getElementById('chat-box');
+    
+    // 1. Εμφάνιση μηνύματος χρήστη
+    box.innerHTML += `<div class="msg user">${text}</div>`;
+    
+    // 2. Εμφάνιση των "3 dots" ως προσωρινό μήνυμα AI
+    let loadingId = "loading-" + Date.now();
+    box.innerHTML += `<div id="${loadingId}" class="msg ai"><span class="dots"></span></div>`;
+    
+    input.value = "";
+    box.scrollTop = box.scrollHeight;
+
+    fetch('/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text: text})
+    })
+    .then(r => r.json())
+    .then(data => {
+        // 3. Αφαίρεση του loading bubble
+        let loadingBubble = document.getElementById(loadingId);
+        if(loadingBubble) loadingBubble.remove();
+
+        // 4. Εμφάνιση της κανονικής απάντησης
+        box.innerHTML += `<div class="msg ai">${data.reply}</div>`;
+        box.scrollTop = box.scrollHeight;
+    })
+    .catch(err => {
+        let loadingBubble = document.getElementById(loadingId);
+        if(loadingBubble) loadingBubble.remove();
+        box.innerHTML += `<div class="msg ai">Σφάλμα σύνδεσης...</div>`;
+    });
+}
+    </script>
+</body>
+</html>
