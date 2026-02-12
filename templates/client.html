@@ -93,67 +93,48 @@
     </div>
 
     <script>
-        function sendMessage() {
-    let input = document.getElementById('userInput');
-    let text = input.value;
-    if(!text) return;
+    // 1. Παίρνουμε το νούμερο της ομπρέλας από την Python
+    const umbrellaNum = "{{ umbrella }}"; 
 
-    let box = document.getElementById('chat-box');
-    
-    // 1. Εμφάνιση μηνύματος χρήστη
-    box.innerHTML += `<div class="msg user">${text}</div>`;
-    
-    // 2. Εμφάνιση των "3 dots" ως προσωρινό μήνυμα AI
-    let loadingId = "loading-" + Date.now();
-    box.innerHTML += `<div id="${loadingId}" class="msg ai"><span class="dots"></span></div>`;
-    
-    input.value = "";
-    box.scrollTop = box.scrollHeight;
+    function sendMessage() {
+        // 2. Παίρνουμε το κείμενο από το input
+        const inputField = document.getElementById('user-input');
+        const userText = inputField.value;
 
-    fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({text: text})
-    })
-    .then(r => r.json())
-    .then(data => {
-        // 3. Αφαίρεση του loading bubble
-        let loadingBubble = document.getElementById(loadingId);
-        if(loadingBubble) loadingBubble.remove();
+        // 3. Αν είναι άδειο, μην κάνεις τίποτα
+        if (!userText.trim()) return;
 
-        // 4. Εμφάνιση της κανονικής απάντησης
-        box.innerHTML += `<div class="msg ai">${data.reply}</div>`;
-        box.scrollTop = box.scrollHeight;
-    })
-    .catch(err => {
-        let loadingBubble = document.getElementById(loadingId);
-        if(loadingBubble) loadingBubble.remove();
-        box.innerHTML += `<div class="msg ai">Σφάλμα σύνδεσης...</div>`;
-    });
-}
-  // Αυτό παίρνει την τιμή από την Python
-const umbrellaNum = "{{ umbrella }}"; 
+        // 4. Καθαρίζουμε το κουτί για το επόμενο μήνυμα
+        inputField.value = '';
 
-function sendMessage() {
-    const input = document.getElementById('user-input');
-    const text = input.value;
-    if(!text) return;
+        // (Προαιρετικά: Εδώ θα μπορούσες να εμφανίσεις το μήνυμα στην οθόνη του χρήστη)
 
-    // Εμφάνιση μηνύματος χρήστη...
-    
-    fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ 
-            text: text, 
-            umbrella: umbrellaNum  // ΕΔΩ ΣΤΕΛΝΕΤΑΙ Η ΟΜΠΡΕΛΑ
+        // 5. Στέλνουμε τα δεδομένα στον σέρβερ
+        fetch('/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                text: userText, 
+                umbrella: umbrellaNum 
+            })
         })
-    })
-    .then(res => res.json())
-    .then(data => {
-        // Εμφάνιση απάντησης AI...
-    });
-}
-    </script>
+        .then(res => res.json())
+        .then(data => {
+            // 6. Εμφάνιση της απάντησης του AI (αν έχεις ένα div με id="chat-output")
+            const output = document.getElementById('chat-output');
+            if(output) {
+                output.innerHTML += `<p><b>AI:</b> ${data.reply}</p>`;
+            } else {
+                alert("AI: " + data.reply); // Αν δεν έχεις div, θα το δεις σε alert
+            }
+        })
+        .catch(err => {
+            console.error("Error:", err);
+            alert("Κάτι πήγε στραβά με την αποστολή.");
+        });
+    }
+</script>
 </body>
 </html>
