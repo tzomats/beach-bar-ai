@@ -1,4 +1,4 @@
-// εδω ειναι ο κωδικας που δουλευε οταν ανεβασαμε στο ρεντερ κ με την βαση 
+// εδω ειναι ο κωδικας που δουλευε οταν ανεβασαμε στο ρεντερ κ με την βαση.
 
 from flask import Flask, render_template, request, jsonify
 import requests
@@ -103,3 +103,4 @@ def owner_history():
         history_list.append(order)
         
     return render_template('history.html', data_list=history_list)
+
