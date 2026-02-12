@@ -41,17 +41,21 @@ def client():
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    user_text = request.json.get('text', '')
+    data = request.json
+    user_text = data.get('text', '')
+    umbrella_fixed = data.get('umbrella', '') 
+
+    # ΑΛΛΑΓΗ ΕΔΩ: Του λέμε ξεκάθαρα ότι ΞΕΡΕΙ την ομπρέλα
     system_instruction = (
-        "Είσαι ένας ευγενικός σερβιτόρος σε beach bar στην Ελλάδα. "
-        "Απάντησε στον πελάτη σύντομα και φιλικά. "
-        "Αν ο πελάτης παραγγέλνει κάτι ΚΑΙ δώσει νούμερο ομπρέλας, "
-        "πρόσθεσε στο τέλος της απάντησής σου τη λέξη ORDER_JSON ακολουθούμενη από το JSON "
-        "με κλειδιά 'umbrella_number' και 'products_list' (name, qty). "
-        "Αν δεν δώσει ομπρέλα, ζήτησέ την ευγενικά."
+        f"Είσαι ένας ευγενικός σερβιτόρος. Ο πελάτης βρίσκεται στην ΟΜΠΡΕΛΑ {umbrella_fixed}. "
+        "ΜΗΝ ρωτήσεις για τον αριθμό ομπρέλας, τον γνωρίζεις ήδη. "
+        "Απάντησε σύντομα και φιλικά. Αν παραγγείλει, φτιάξε το JSON με 'umbrella_number': '" + umbrella_fixed + "' "
+        "και 'products_list'. Πρόσθεσε τη λέξη ORDER_JSON στο τέλος."
     )
     
     prompt = f"{system_instruction}\nΠελάτης: {user_text}"
+    
+    # ... ο υπόλοιπος κώδικας (try/except) παραμένει ο ίδιος ...
     
     try:
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
@@ -97,5 +101,6 @@ def owner_history():
 # --- ΤΕΛΕΥΤΑΙΑ ΓΡΑΜΜΗ ΤΟΥ ΑΡΧΕΙΟΥ ---
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)
+
 
 
