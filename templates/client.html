@@ -131,25 +131,29 @@
         box.innerHTML += `<div class="msg ai">Σφάλμα σύνδεσης...</div>`;
     });
 }
-    // Πάρε το νούμερο της ομπρέλας που έστειλε η Python
-let umbrellaNumber = "{{ umbrella }}";
+  // Αυτό παίρνει την τιμή από την Python
+const umbrellaNum = "{{ umbrella }}"; 
 
 function sendMessage() {
-    let userInput = document.getElementById('user-input').value;
+    const input = document.getElementById('user-input');
+    const text = input.value;
+    if(!text) return;
+
+    // Εμφάνιση μηνύματος χρήστη...
     
     fetch('/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ 
-            text: userInput, 
-            umbrella: umbrellaNumber // Στέλνουμε το νούμερο αυτόματα!
+            text: text, 
+            umbrella: umbrellaNum  // ΕΔΩ ΣΤΕΛΝΕΤΑΙ Η ΟΜΠΡΕΛΑ
         })
     })
     .then(res => res.json())
     .then(data => {
-        // Εμφάνιση απάντησης...
+        // Εμφάνιση απάντησης AI...
     });
-}    
+}
     </script>
 </body>
 </html>
