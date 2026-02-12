@@ -35,7 +35,9 @@ def index():
 
 @app.route('/client')
 def client():
-    return render_template('client.html')
+    # Παίρνει το 'u' από το link (π.χ. ?u=5). Αν δεν υπάρχει, αφήνει κενό.
+    u_number = request.args.get('u', '') 
+    return render_template('client.html', umbrella=u_number)
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -95,3 +97,4 @@ def owner_history():
 # --- ΤΕΛΕΥΤΑΙΑ ΓΡΑΜΜΗ ΤΟΥ ΑΡΧΕΙΟΥ ---
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)
+
