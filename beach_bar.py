@@ -6,8 +6,8 @@ import sqlite3
 
 app = Flask(__name__)
 
-API_KEY = "AIzaSyCu6l9azuUcex5x02gX8nCUr9ZIbq2JccM"
-MODEL = "gemini-1.5-flash"
+API_KEY = "AIzaSyDi3MgwXvAqda1APnSHHT6uYl5ZrNF-ymU"
+MODEL = "gemini-3-pro-preview"
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
 def init_db():
@@ -74,3 +74,4 @@ def admin_logs():
     return render_template('logs.html', logs=logs)
 
 # Οι υπόλοιπες διαδρομές (index, delete, κτλ) παραμένουν ίδιες...
+
