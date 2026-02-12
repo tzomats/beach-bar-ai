@@ -38,7 +38,6 @@ def index():
 
 @app.route('/client')
 def client():
-    # Παίρνει το u από το link (π.χ. ?u=5)
     u_number = request.args.get('u', 'Άγνωστη') 
     return render_template('client.html', umbrella=u_number)
 
@@ -46,7 +45,7 @@ def client():
 def chat():
     data = request.json
     user_text = data.get('text', '')
-    umbrella_fixed = data.get('umbrella', '??') # Το νούμερο που στείλαμε από το JavaScript
+    umbrella_fixed = data.get('umbrella', '??')
     
     system_instruction = (
         f"Είσαι ένας σερβιτόρος. Ο πελάτης είναι στην ΟΜΠΡΕΛΑ {umbrella_fixed}. "
@@ -65,8 +64,6 @@ def chat():
             visible_reply = parts[0].strip()
             json_str = re.search(r'\{.*\}', parts[1], re.DOTALL).group()
             order_data = json.loads(json_str)
-            
-            # Σιγουρευόμαστε ότι το JSON έχει το σωστό νούμερο ομπρέλας
             order_data['umbrella_number'] = umbrella_fixed
             
             conn = sqlite3.connect('orders.db')
@@ -76,10 +73,25 @@ def chat():
             conn.close()
         else:
             visible_reply = ai_reply
-
         return jsonify({"reply": visible_reply})
     except:
         return jsonify({"reply": "Σφάλμα σύνδεσης."})
+
+# --- Η ΔΙΑΔΡΟΜΗ ΠΟΥ ΕΛΕΙΠΕ ---
+@app.route('/owner-history')
+def owner_history():
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    c.execute("SELECT id, content, timestamp FROM orders ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    history_list = []
+    for row in rows:
+        order = json.loads(row[1])
+        order['id'] = row[0]
+        order['time'] = row[2]
+        history_list.append(order)
+    return render_template('history.html', data_list=history_list)
 
 @app.route('/delete/<int:order_id>', methods=['POST'])
 def delete_order(order_id):
