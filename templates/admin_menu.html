@@ -7,36 +7,48 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
         .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #333; }
+        h1, h3 { color: #333; }
         form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
         input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #28a745; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #218838; }
-        table { width: 100%; border-collapse: collapse; }
+        .photo-section { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #666; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
         .del-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        #statusMsg { color: #0056b3; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Προσθήκη Προϊόντος</h1>
-    
+    <h1>Διαχείριση Μενού</h1>
+
+    <div class="photo-section">
+        <h3>Αυτόματη Ενημέρωση από Φωτογραφία</h3>
+        <input type="file" id="menuPhoto" accept="image/*">
+        <button onclick="uploadPhoto()" id="uploadBtn">Ανέβασμα & Ανάλυση</button>
+        <p id="statusMsg"></p>
+    </div>
+
+    <hr>
+
+    <h3>Χειροκίνητη Προσθήκη</h3>
     <form method="POST">
-        <input type="text" name="name" placeholder="Όνομα προϊόντος (π.χ. Freddo Espresso)" required>
-        <input type="number" name="price" step="0.1" placeholder="Τιμή (π.χ. 4.5)" required>
+        <input type="text" name="name" placeholder="Όνομα προϊόντος" required>
+        <input type="number" name="price" step="0.1" placeholder="Τιμή" required>
         <select name="category">
             <option value="Καφέδες">Καφέδες</option>
             <option value="Ποτά">Ποτά</option>
             <option value="Αναψυκτικά">Αναψυκτικά</option>
             <option value="Φαγητά">Φαγητά</option>
         </select>
-        <button type="submit">Προσθήκη στο Μενού</button>
+        <button type="submit">Προσθήκη</button>
     </form>
 
     <hr>
 
-    <h1>Υπάρχον Μενού</h1>
+    <h3>Υπάρχον Μενού</h3>
     <table>
         <thead>
             <tr>
@@ -62,6 +74,47 @@
 </div>
 
 <script>
+    // Λειτουργία για Ανέβασμα Φωτογραφίας
+    function uploadPhoto() {
+        const fileInput = document.getElementById('menuPhoto');
+        const btn = document.getElementById('uploadBtn');
+        const msg = document.getElementById('statusMsg');
+
+        if (fileInput.files.length === 0) {
+            alert("Παρακαλώ διάλεξε μια φωτογραφία πρώτα.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('photo', fileInput.files[0]);
+
+        btn.disabled = true;
+        msg.innerText = "Το AI αναλύει τον κατάλογο... Παρακαλώ περιμένετε...";
+
+        fetch('/upload-menu-photo', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === "success") {
+                alert("Προστέθηκαν " + data.items_added + " προϊόντα!");
+                location.reload();
+            } else {
+                alert("Σφάλμα: " + data.error);
+                msg.innerText = "";
+            }
+        })
+        .catch(err => {
+            alert("Υπήρξε πρόβλημα στη σύνδεση.");
+            console.error(err);
+        })
+        .finally(() => {
+            btn.disabled = false;
+        });
+    }
+
+    // Λειτουργία για Διαγραφή
     function deleteItem(id) {
         if(confirm('Σίγουρα διαγραφή;')) {
             fetch('/delete-menu/' + id, { method: 'POST' })
