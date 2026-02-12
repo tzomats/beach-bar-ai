@@ -6,7 +6,7 @@ import sqlite3
 
 app = Flask(__name__)
 
-API_KEY = "AIzaSyCu6l9azuUcex5x02gX8nCUr9ZIbq2JccM"
+API_KEY = "AIzaSyDi3MgwXvAqda1APnSHHT6uYl5ZrNF-ymU"
 MODEL = "gemini-3-flash-preview"
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
@@ -97,4 +97,5 @@ def owner_history():
 # --- ΤΕΛΕΥΤΑΙΑ ΓΡΑΜΜΗ ΤΟΥ ΑΡΧΕΙΟΥ ---
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)
+
 
