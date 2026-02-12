@@ -75,7 +75,7 @@ def chat():
             visible_reply = ai_reply
         return jsonify({"reply": visible_reply})
     except:
-        return jsonify({"reply": "Σφάλμα σύνδεσης."})
+        return jsonify({"reply": "Σφάλμα σύνδεσης..."})
 
 # --- Η ΔΙΑΔΡΟΜΗ ΠΟΥ ΕΛΕΙΠΕ ---
 @app.route('/owner-history')
@@ -104,3 +104,4 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
