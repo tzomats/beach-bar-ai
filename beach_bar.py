@@ -39,18 +39,19 @@ def index():
 
 @app.route('/client')
 def client():
-    return render_template('client.html')
+    # Παίρνουμε το νούμερο της ομπρέλας από το link (αν υπάρχει)
+    umbrella = request.args.get('u', '') 
+    return render_template('client.html', umbrella=umbrella)
 
 @app.route('/chat', methods=['POST'])
 def chat():
     user_text = request.json.get('text', '')
+    umbrella_fixed = request.json.get('umbrella', '') # Το νούμερο που ήρθε από το link
+    
     system_instruction = (
-        "Είσαι ένας ευγενικός σερβιτόρος σε beach bar στην Ελλάδα. "
-        "Απάντησε στον πελάτη σύντομα και φιλικά. "
-        "Αν ο πελάτης παραγγέλνει κάτι ΚΑΙ δώσει νούμερο ομπρέλας, "
-        "πρόσθεσε στο τέλος της απάντησής σου τη λέξη ORDER_JSON ακολουθούμενη από το JSON "
-        "με κλειδιά 'umbrella_number' και 'products_list' (name, qty). "
-        "Αν δεν δώσει ομπρέλα, ζήτησέ την ευγενικά."
+        f"Είσαι ένας ευγενικός σερβιτόρος. Ο πελάτης βρίσκεται στην ΟΜΠΡΕΛΑ {umbrella_fixed}. "
+        "Απάντησε σύντομα. Αν ο πελάτης παραγγείλει, πρόσθεσε στο τέλος ORDER_JSON "
+        f"με το σωστό JSON. Χρησιμοποίησε οπωσδήποτε το umbrella_number: {umbrella_fixed}."
     )
     
     prompt = f"{system_instruction}\nΠελάτης: {user_text}"
@@ -99,4 +100,5 @@ def owner_history():
         history_list.append(order)
         
     return render_template('history.html', data_list=history_list)
+
 
