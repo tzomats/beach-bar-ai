@@ -28,13 +28,23 @@ init_db()
 def index():
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    # Παίρνουμε όλες τις παραγγελίες, τις πιο πρόσφατες πάνω-πάνω
-    c.execute("SELECT content FROM orders ORDER BY id DESC")
+    c.execute("SELECT id, content FROM orders ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
     
-    # Μετατρέπουμε το κείμενο από τη βάση πάλι σε λίστα αντικειμένων
-    beach_orders_list = [json.loads(row[0]) for row in rows]
+    beach_orders_list = []
+    for row in rows:
+        order_id = row[0]
+        order_data = json.loads(row[1]) # Εδώ είναι το umbrella_number και το products_list
+        
+        # Φτιάχνουμε ένα καθαρό αντικείμενο για το HTML
+        full_order = {
+            "id": order_id,
+            "umbrella_number": order_data.get("umbrella_number", "??"),
+            "products_list": order_data.get("products_list", [])
+        }
+        beach_orders_list.append(full_order)
+        
     return render_template('dashboard.html', data_list=beach_orders_list)
 
 @app.route('/client')
@@ -100,5 +110,6 @@ def owner_history():
         history_list.append(order)
         
     return render_template('history.html', data_list=history_list)
+
 
 
