@@ -13,10 +13,11 @@
         button { background-color: #28a745; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #218838; }
         .photo-section { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #666; }
+        .text-section { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #856404; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
         .del-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
-        #statusMsg { color: #0056b3; font-weight: bold; }
+        #statusMsg, #statusMsgText { font-weight: bold; font-size: 0.9em; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -31,8 +32,15 @@
         <p id="statusMsg"></p>
     </div>
 
-    <hr>
+    <div class="text-section">
+        <h3>Έξυπνη Εισαγωγή Κειμένου</h3>
+        <textarea id="rawMenuText" rows="4" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc;" placeholder="Γράψε εδώ χύμα: π.χ. Πατσάς 5 ευρώ ψιλοκομμένος, Μπύρα 4..."></textarea>
+        <button onclick="uploadText()" id="uploadTextBtn" style="margin-top: 10px; background-color: #856404;">Ανάλυση Κειμένου</button>
+        <p id="statusMsgText"></p>
+    </div>
 
+    <hr>
+    
     <h3>Χειροκίνητη Προσθήκη</h3>
     <form method="POST">
         <input type="text" name="name" placeholder="Όνομα προϊόντος" required>
@@ -74,7 +82,7 @@
 </div>
 
 <script>
-    // Λειτουργία για Ανέβασμα Φωτογραφίας
+    // 1. ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΦΩΤΟΓΡΑΦΙΑ
     function uploadPhoto() {
         const fileInput = document.getElementById('menuPhoto');
         const btn = document.getElementById('uploadBtn');
@@ -89,7 +97,7 @@
         formData.append('photo', fileInput.files[0]);
 
         btn.disabled = true;
-        msg.innerText = "Το AI αναλύει τον κατάλογο... Παρακαλώ περιμένετε...";
+        msg.innerText = "Το AI αναλύει την εικόνα...";
 
         fetch('/upload-menu-photo', {
             method: 'POST',
@@ -105,16 +113,44 @@
                 msg.innerText = "";
             }
         })
-        .catch(err => {
-            alert("Υπήρξε πρόβλημα στη σύνδεση.");
-            console.error(err);
+        .finally(() => { btn.disabled = false; });
+    }
+
+    // 2. ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΚΕΙΜΕΝΟ (ΕΞΩ ΑΠΟ ΤΗΝ ΠΡΟΗΓΟΥΜΕΝΗ!)
+    function uploadText() {
+        const textInput = document.getElementById('rawMenuText');
+        const btn = document.getElementById('uploadTextBtn');
+        const msg = document.getElementById('statusMsgText');
+
+        if (!textInput.value.trim()) {
+            alert("Παρακαλώ γράψε κάτι πρώτα.");
+            return;
+        }
+
+        btn.disabled = true;
+        msg.innerText = "Το AI επεξεργάζεται το κείμενο...";
+
+        fetch('/upload-menu-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: textInput.value })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === "success") {
+                alert("Προστέθηκαν " + data.items_added + " προϊόντα!");
+                location.reload();
+            } else {
+                alert("Σφάλμα: " + data.error);
+            }
         })
         .finally(() => {
             btn.disabled = false;
+            msg.innerText = "";
         });
     }
 
-    // Λειτουργία για Διαγραφή
+    // 3. ΣΥΝΑΡΤΗΣΗ ΓΙΑ ΔΙΑΓΡΑΦΗ
     function deleteItem(id) {
         if(confirm('Σίγουρα διαγραφή;')) {
             fetch('/delete-menu/' + id, { method: 'POST' })
