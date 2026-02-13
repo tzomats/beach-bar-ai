@@ -79,17 +79,22 @@ def chat():
         if 'candidates' in result and len(result['candidates']) > 0:
             ai_reply = result['candidates'][0]['content']['parts'][0]['text']
             
-            # ΕΔΩ ΕΙΝΑΙ ΤΟ ΚΛΕΙΔΙ: Αν η απάντηση περιέχει παραγγελία, βάλτη στη βάση orders
+            # --- ΑΥΤΟ ΤΟ ΚΟΜΜΑΤΙ ΛΕΙΠΕΙ ---
             if "ORDER_JSON" in ai_reply:
                 try:
-                    # Βρίσκουμε το JSON κομμάτι
-                    json_part = re.search(r'\{.*\}', ai_reply, re.DOTALL).group()
-                    c.execute("INSERT INTO orders (content) VALUES (?)", (json_part,))
-                    conn.commit()
+                    # Απομονώνουμε μόνο το { ... }
+                    match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
+                    if match:
+                        order_data = match.group()
+                        # Το βάζουμε στον πίνακα orders για να φανεί στο Dashboard
+                        c.execute("INSERT INTO orders (content) VALUES (?)", (order_data,))
+                        conn.commit()
                 except Exception as e:
-                    print(f"Order Save Error: {e}")
-
-            return jsonify({"reply": ai_reply.split("ORDER_JSON")[0].strip()}) # Στέλνουμε στον πελάτη μόνο τα λόγια
+                    print(f"Error saving order: {e}")
+            
+            # Στέλνουμε στον πελάτη μόνο το κείμενο, χωρίς το JSON
+            clean_reply = ai_reply.split("ORDER_JSON")[0].strip()
+            return jsonify({"reply": clean_reply})
     except:
         return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
     finally:
@@ -175,6 +180,7 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
