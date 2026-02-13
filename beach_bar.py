@@ -49,59 +49,49 @@ def client():
     u_number = request.args.get('u', '??') 
     return render_template('client.html', umbrella=u_number)
 
-@app.route('/chat', methods=['POST'])
-def chat():
+@app.route('/upload-menu-text', methods=['POST'])
+def upload_menu_text():
     data = request.json
-    user_text = data.get('text') or data.get('message') or ""
-    umbrella_fixed = str(data.get('umbrella') or data.get('umbrella_id') or "??")
-    
-    conn = sqlite3.connect('orders.db')
-    c = conn.cursor()
-    c.execute("SELECT name, price FROM menu")
-    rows = c.fetchall()
-    
-    if not rows:
-        menu_context = "Αυτή τη στιγμή δεν έχουμε τίποτα διαθέσιμο."
-    else:
-        menu_context = "ΚΑΤΑΛΟΓΟΣ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in rows])
-    
-    system_prompt = (
-        f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. "
-        "Απάντησε σύντομα. ΑΝ Ο ΠΕΛΑΤΗΣ ΠΑΡΑΓΓΕΙΛΕΙ, πρέπει ΟΠΩΣΔΗΠΟΤΕ στο τέλος της απάντησής σου "
-        "να γράψεις τη λέξη ORDER_JSON και μετά τα στοιχεία σε JSON μορφή, π.χ.: "
-        "ORDER_JSON {\"items\": [{\"name\": \"Τοστ\", \"price\": 4.0}], \"total\": 4.0, \"umbrella\": \""+umbrella_fixed+"\"}"
+    raw_text = data.get('text', '')
+    if not raw_text: 
+        return jsonify({"error": "Το κείμενο είναι κενό"}), 400
+        
+    prompt = (
+        "Ανάλυσε το παρακάτω κείμενο και βρες τα προϊόντα. "
+        "Επέστρεψε ΜΟΝΟ ένα JSON array με κλειδιά 'name', 'price', 'category'. "
+        "Μην γράψεις κανένα άλλο σχόλιο. Μόνο το JSON σε αγκύλες [ ]. "
+        "Κείμενο: " + raw_text
     )
 
     try:
-        # Εδώ η εσοχή διορθώθηκε
-        resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
-        result = resp.json() 
+        resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
+        ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
         
-        if 'candidates' in result and len(result['candidates']) > 0:
-            ai_reply = result['candidates'][0]['content']['parts'][0]['text']
-            
-            # 1. Έλεγχος για παραγγελία
-            if "ORDER_JSON" in ai_reply:
+        # Καθαρισμός για να βρούμε μόνο το JSON
+        match = re.search(r'\[.*\]', ai_data, re.DOTALL)
+        
+        if match:
+            clean_json = match.group()
+            menu_items = json.loads(clean_json)
+
+            conn = sqlite3.connect('orders.db')
+            c = conn.cursor()
+            for item in menu_items:
                 try:
-                    match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
-                    if match:
-                        order_data = match.group()
-                        c.execute("INSERT INTO orders (content) VALUES (?)", (order_data,))
-                        conn.commit()
-                except Exception as e:
-                    print(f"Error saving order: {e}")
+                    p_raw = str(item.get('price')).replace('€', '').replace(',', '.').strip()
+                    price_val = float(p_raw)
+                    c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
+                              (item.get('name'), price_val, item.get('category', 'Γενικά')))
+                except: continue
             
-            # 2. Καθαρισμός απάντησης
-            clean_reply = ai_reply.split("ORDER_JSON")[0].strip()
-            return jsonify({"reply": clean_reply})
+            conn.commit()
+            conn.close()
+            return jsonify({"status": "success", "items_added": len(menu_items)})
         else:
-            return jsonify({"reply": "Το AI δεν έδωσε απάντηση."})
+            return jsonify({"error": "Δεν βρέθηκε έγκυρο JSON στην απάντηση του AI"}), 500
             
     except Exception as e:
-        print(f"General Error: {e}")
-        return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
-    finally:
-        conn.close()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/admin-menu', methods=['GET', 'POST'])
 def admin_menu():
@@ -183,6 +173,7 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
