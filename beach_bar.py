@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 # --- ΡΥΘΜΙΣΕΙΣ ---
 API_KEY = "AIzaSyDi3MgwXvAqda1APnSHHT6uYl5ZrNF-ymU"
-MODEL = "gemini-3-flash-preview" # Προτείνω το 1.5 flash για καλύτερη υποστήριξη εικόνας
+MODEL = "gemini-1.5-flash" # To 3-flash-preview είναι ασταθές, το 1.5-flash είναι το standard πλέον
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
 def init_db():
@@ -60,7 +60,6 @@ def chat():
     c.execute("SELECT name, price FROM menu")
     rows = c.fetchall()
     
-    # Φτιάχνουμε το μενού για το AI
     if not rows:
         menu_context = "Αυτή τη στιγμή δεν έχουμε τίποτα διαθέσιμο."
     else:
@@ -85,8 +84,9 @@ def admin_menu():
         name = request.form.get('name')
         price = request.form.get('price')
         category = request.form.get('category')
-        c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (name, price, category))
-        conn.commit()
+        if name and price:
+            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (name, price, category))
+            conn.commit()
     c.execute("SELECT id, name, price, category FROM menu ORDER BY category")
     items = c.fetchall()
     conn.close()
@@ -108,21 +108,18 @@ def upload_menu_text():
     if not raw_text: 
         return jsonify({"error": "Το κείμενο είναι κενό"}), 400
         
-    # Οδηγούμε το Gemini 3 να δώσει ΑΥΣΤΗΡΑ μόνο το JSON
     prompt = (
         "Ανάλυσε το παρακάτω κείμενο και βρες τα προϊόντα. "
         "Επέστρεψε ΜΟΝΟ ένα JSON array με κλειδιά 'name', 'price', 'category'. "
-        "Μην γράψεις κανένα άλλο σχόλιο ή κείμενο. Μόνο το JSON σε αγκύλες [ ]. "
-        "Αν η τιμή έχει ευρώ (€), βγάλε το και κράτα μόνο τον αριθμό. "
+        "Μην γράψεις κανένα άλλο σχόλιο. Μόνο το JSON σε αγκύλες [ ]. "
         "Κείμενο: " + raw_text
     )
 
     try:
-        # Κλήση στο Gemini 3
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
         ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
         
-        # ΚΑΘΑΡΙΣΜΟΣ: Βρίσκουμε πού ξεκινάνε οι αγκύλες [ ] για να μην έχουμε σφάλμα group
+        # Καθαρισμός για να βρούμε μόνο το JSON
         match = re.search(r'\[.*\]', ai_data, re.DOTALL)
         
         if match:
@@ -132,47 +129,19 @@ def upload_menu_text():
             conn = sqlite3.connect('orders.db')
             c = conn.cursor()
             for item in menu_items:
-                # Διορθώνουμε την τιμή (κόμματα σε τελείες) για να μην χαλάσει η βάση
                 try:
-                    price_val = float(str(item['price']).replace(',', '.'))
+                    p_raw = str(item.get('price')).replace('€', '').replace(',', '.').strip()
+                    price_val = float(p_raw)
                     c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
-                              (item[0] if isinstance(item, list) else item.get('name'), 
-                               price_val, 
-                               item.get('category', 'Γενικά')))
-                except:
-                    continue # Αν ένα προϊόν έχει λάθος τιμή, προχώρα στο επόμενο
+                              (item.get('name'), price_val, item.get('category', 'Γενικά')))
+                except: continue
             
             conn.commit()
             conn.close()
             return jsonify({"status": "success", "items_added": len(menu_items)})
         else:
-            return jsonify({"error": "Το AI δεν έστειλε τα δεδομένα σε μορφή πίνακα. Δοκίμασε ξανά."}), 500
+            return jsonify({"error": "Δεν βρέθηκε έγκυρο JSON στην απάντηση του AI"}), 500
             
-    except Exception as e:
-        return jsonify({"error": f"Κάτι πήγε στραβά: {str(e)}"}), 500
-
-@app.route('/upload-menu-text', methods=['POST'])
-def upload_menu_text():
-    data = request.json
-    raw_text = data.get('text', '')
-    if not raw_text: return jsonify({"error": "Κενό κείμενο"}), 400
-    
-    prompt = f"Μετάτρεψε αυτό το κείμενο σε JSON με 'name', 'price', 'category': {raw_text}"
-    
-    try:
-        resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
-        ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        clean_json = re.search(r'\[.*\]', ai_data, re.DOTALL).group()
-        menu_items = json.loads(clean_json)
-
-        conn = sqlite3.connect('orders.db')
-        c = conn.cursor()
-        for item in menu_items:
-            p = str(item['price']).replace('€', '').replace(',', '.').strip()
-            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (item['name'], float(p), item['category']))
-        conn.commit()
-        conn.close()
-        return jsonify({"status": "success", "items_added": len(menu_items)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -187,8 +156,3 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
-
-
-
-
-
