@@ -72,30 +72,34 @@ def chat():
         "ORDER_JSON {\"items\": [{\"name\": \"Τοστ\", \"price\": 4.0}], \"total\": 4.0, \"umbrella\": \""+umbrella_fixed+"\"}"
     )
 
-    try:
+   try:
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
-        ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        return jsonify({"reply": ai_reply})
+        result = resp.json() # Ορίζουμε το result
+        
         if 'candidates' in result and len(result['candidates']) > 0:
             ai_reply = result['candidates'][0]['content']['parts'][0]['text']
             
-            # --- ΑΥΤΟ ΤΟ ΚΟΜΜΑΤΙ ΛΕΙΠΕΙ ---
+            # 1. ΠΡΩΤΑ ελέγχουμε για παραγγελία και σώζουμε στη βάση
             if "ORDER_JSON" in ai_reply:
                 try:
-                    # Απομονώνουμε μόνο το { ... }
                     match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
                     if match:
                         order_data = match.group()
-                        # Το βάζουμε στον πίνακα orders για να φανεί στο Dashboard
                         c.execute("INSERT INTO orders (content) VALUES (?)", (order_data,))
                         conn.commit()
                 except Exception as e:
                     print(f"Error saving order: {e}")
             
-            # Στέλνουμε στον πελάτη μόνο το κείμενο, χωρίς το JSON
+            # 2. ΜΕΤΑ καθαρίζουμε την απάντηση
             clean_reply = ai_reply.split("ORDER_JSON")[0].strip()
+            
+            # 3. ΤΕΛΕΥΤΑΙΟ το return για να προλάβει να τρέξει ο παραπάνω κώδικας
             return jsonify({"reply": clean_reply})
-    except:
+        else:
+            return jsonify({"reply": "Το AI δεν έδωσε απάντηση."})
+            
+    except Exception as e:
+        print(f"General Error: {e}")
         return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
     finally:
         conn.close()
@@ -180,6 +184,7 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
