@@ -202,8 +202,50 @@ def upload_menu_photo():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/upload-menu-text', methods=['POST'])
+def upload_menu_text():
+    data = request.json
+    raw_text = data.get('text', '')
+
+    if not raw_text:
+        return jsonify({"error": "Το κείμενο είναι κενό"}), 400
+        
+# --- καρτελα διαχηριστη ΑΙ βοηθος για εισγωγη πρωιοντων  ---
+    prompt = (
+        "Ανάλυσε το παρακάτω κείμενο και εξήγαγε τα προϊόντα του καταλόγου. "
+        "Επέστρεψε ΜΟΝΟ ένα JSON array με κλειδιά 'name', 'price', 'category'. "
+        "Αν υπάρχουν λεπτομέρειες (π.χ. ψιλοκομμένος), πρόσθεσέ τις στο 'name'. "
+        "Παράδειγμα: [{\"name\": \"Πατσάς (ψιλοκομμένος ή ανάμικτος)\", \"price\": 5.0, \"category\": \"Φαγητά\"}]. "
+        "Κείμενο: " + raw_text
+    )
+
+    try:
+        resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
+        ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        
+        # Καθαρισμός και μετατροπή σε λίστα
+        clean_json = re.search(r'\[.*\]', ai_data, re.DOTALL).group()
+        menu_items = json.loads(clean_json)
+
+        conn = sqlite3.connect('orders.db')
+        c = conn.cursor()
+        for item in menu_items:
+            price = float(str(item['price']).replace(',', '.'))
+            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
+                      (item['name'], price, item['category']))
+        conn.commit()
+        conn.close()
+
+        return jsonify({"status": "success", "items_added": len(menu_items)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
+
+
+
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
