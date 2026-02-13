@@ -105,56 +105,51 @@ def delete_menu(item_id):
 def upload_menu_text():
     data = request.json
     raw_text = data.get('text', '')
-    if not raw_text: return jsonify({"error": "Κενό κείμενο"}), 400
-    
+    if not raw_text: 
+        return jsonify({"error": "Το κείμενο είναι κενό"}), 400
+        
+    # Οδηγούμε το Gemini 3 να δώσει ΑΥΣΤΗΡΑ μόνο το JSON
     prompt = (
-        "Εξήγαγε τα προϊόντα από το κείμενο σε ένα JSON array. "
-        "Κάθε αντικείμενο ΠΡΕΠΕΙ να έχει 'name', 'price', 'category'. "
-        "Μην γράψεις τίποτα άλλο, μόνο το JSON μέσα σε αγκύλες [ ]. "
+        "Ανάλυσε το παρακάτω κείμενο και βρες τα προϊόντα. "
+        "Επέστρεψε ΜΟΝΟ ένα JSON array με κλειδιά 'name', 'price', 'category'. "
+        "Μην γράψεις κανένα άλλο σχόλιο ή κείμενο. Μόνο το JSON σε αγκύλες [ ]. "
+        "Αν η τιμή έχει ευρώ (€), βγάλε το και κράτα μόνο τον αριθμό. "
         "Κείμενο: " + raw_text
     )
-    
+
     try:
+        # Κλήση στο Gemini 3
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
         ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
         
-        # Εδώ είναι η διόρθωση για το group error:
+        # ΚΑΘΑΡΙΣΜΟΣ: Βρίσκουμε πού ξεκινάνε οι αγκύλες [ ] για να μην έχουμε σφάλμα group
         match = re.search(r'\[.*\]', ai_data, re.DOTALL)
-        if not match:
-            return jsonify({"error": "Το AI δεν επέστρεψε σωστή μορφή δεδομένων. Δοκίμασε πιο καθαρό κείμενο."}), 500
+        
+        if match:
+            clean_json = match.group()
+            menu_items = json.loads(clean_json)
+
+            conn = sqlite3.connect('orders.db')
+            c = conn.cursor()
+            for item in menu_items:
+                # Διορθώνουμε την τιμή (κόμματα σε τελείες) για να μην χαλάσει η βάση
+                try:
+                    price_val = float(str(item['price']).replace(',', '.'))
+                    c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
+                              (item[0] if isinstance(item, list) else item.get('name'), 
+                               price_val, 
+                               item.get('category', 'Γενικά')))
+                except:
+                    continue # Αν ένα προϊόν έχει λάθος τιμή, προχώρα στο επόμενο
             
-        menu_items = json.loads(match.group())
-
-        conn = sqlite3.connect('orders.db')
-        c = conn.cursor()
-        for item in menu_items:
-            # Μετατροπή τιμής σε αριθμό (χειρισμός κόμματος/τελείας)
-            val = str(item['price']).replace('€','').replace(',','.').strip()
-            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
-                      (item['name'], float(val), item['category']))
-        conn.commit()
-        conn.close()
-        return jsonify({"status": "success", "items_added": len(menu_items)})
+            conn.commit()
+            conn.close()
+            return jsonify({"status": "success", "items_added": len(menu_items)})
+        else:
+            return jsonify({"error": "Το AI δεν έστειλε τα δεδομένα σε μορφή πίνακα. Δοκίμασε ξανά."}), 500
+            
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    try:
-        resp = requests.post(URL, json=payload)
-        ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        clean_json = re.search(r'\[.*\]', ai_data, re.DOTALL).group()
-        menu_items = json.loads(clean_json)
-
-        conn = sqlite3.connect('orders.db')
-        c = conn.cursor()
-        for item in menu_items:
-            # Διόρθωση τιμής αν έρθει ως κείμενο
-            p = str(item['price']).replace('€', '').replace(',', '.').strip()
-            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (item['name'], float(p), item['category']))
-        conn.commit()
-        conn.close()
-        return jsonify({"status": "success", "items_added": len(menu_items)})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Κάτι πήγε στραβά: {str(e)}"}), 500
 
 @app.route('/upload-menu-text', methods=['POST'])
 def upload_menu_text():
@@ -192,6 +187,7 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
