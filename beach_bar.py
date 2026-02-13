@@ -52,56 +52,28 @@ def client():
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
-    user_text = data.get('text', '')
-    umbrella_fixed = str(data.get('umbrella', '??'))
+    user_text = data.get('text') or data.get('message') or ""
+    umbrella_fixed = str(data.get('umbrella') or data.get('umbrella_id') or "??")
     
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    
-    # Φόρτωση Μενού για να ξέρει το AI τι πουλάμε
     c.execute("SELECT name, price FROM menu")
-    menu_rows = c.fetchall()
-    menu_context = "ΜΕΝΟΥ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in menu_rows])
+    rows = c.fetchall()
     
-    # Οδηγίες για το Gemini 3
-    system_instruction = (
-        f"Είσαι ο σερβιτόρος στην ομπρέλα {umbrella_fixed}. "
-        f"Χρησιμοποίησε ΑΠΟΚΛΕΙΣΤΙΚΑ αυτό το μενού: {menu_context}. "
-        "Απάντησε σύντομα. Αν παραγγείλουν, δώσε ORDER_JSON στο τέλος."
-    )
-
-    payload = {
-        "contents": [{"parts": [{"text": f"{system_instruction}\nΠελάτης: {user_text}"}]}]
-    }
+    # Φτιάχνουμε το μενού για το AI
+    if not rows:
+        menu_context = "Αυτή τη στιγμή δεν έχουμε τίποτα διαθέσιμο."
+    else:
+        menu_context = "ΚΑΤΑΛΟΓΟΣ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in rows])
+    
+    system_prompt = f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. Απάντα σύντομα."
 
     try:
-        resp = requests.post(URL, json=payload)
-        result = resp.json()
-
-        # Έλεγχος αν η Google έστειλε απάντηση
-        if 'candidates' in result and len(result['candidates']) > 0:
-            ai_reply = result['candidates'][0]['content']['parts'][0]['text']
-            
-            # Αποθήκευση στη βάση
-            c.execute("INSERT INTO messages (umbrella, sender, text) VALUES (?, ?, ?)", (umbrella_fixed, 'Πελάτης', user_text))
-            c.execute("INSERT INTO messages (umbrella, sender, text) VALUES (?, ?, ?)", (umbrella_fixed, 'AI', ai_reply))
-            
-            # Αν υπάρχει παραγγελία, βάλτη στον πίνακα orders
-            if "ORDER_JSON" in ai_reply:
-                json_match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
-                if json_match:
-                    c.execute("INSERT INTO orders (content) VALUES (?)", (json_match.group(),))
-            
-            conn.commit()
-            return jsonify({"reply": ai_reply})
-        else:
-            # Εδώ βλέπουμε τι φταίει αν δεν δουλεύει
-            print("Full API Error:", result)
-            return jsonify({"reply": "Το AI δεν απάντησε. Δοκίμασε ξανά σε λίγο."})
-
-    except Exception as e:
-        print(f"Connection Error: {e}")
-        return jsonify({"reply": "Πρόβλημα σύνδεσης."})
+        resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
+        ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        return jsonify({"reply": ai_reply})
+    except:
+        return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
     finally:
         conn.close()
 
@@ -129,26 +101,42 @@ def delete_menu(item_id):
     conn.close()
     return jsonify({"status": "success"})
 
-@app.route('/upload-menu-photo', methods=['POST'])
-def upload_menu_photo():
-    if 'photo' not in request.files:
-        return jsonify({"error": "No photo uploaded"}), 400
-    file = request.files['photo']
-    image = Image.open(file).convert('RGB')
-    buffered = BytesIO()
-    image.save(buffered, format="JPEG")
-    img_str = base64.b64encode(buffered.getvalue()).decode()
+@app.route('/upload-menu-text', methods=['POST'])
+def upload_menu_text():
+    data = request.json
+    raw_text = data.get('text', '')
+    if not raw_text: return jsonify({"error": "Κενό κείμενο"}), 400
+    
+    prompt = (
+        "Εξήγαγε τα προϊόντα από το κείμενο σε ένα JSON array. "
+        "Κάθε αντικείμενο ΠΡΕΠΕΙ να έχει 'name', 'price', 'category'. "
+        "Μην γράψεις τίποτα άλλο, μόνο το JSON μέσα σε αγκύλες [ ]. "
+        "Κείμενο: " + raw_text
+    )
+    
+    try:
+        resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
+        ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        
+        # Εδώ είναι η διόρθωση για το group error:
+        match = re.search(r'\[.*\]', ai_data, re.DOTALL)
+        if not match:
+            return jsonify({"error": "Το AI δεν επέστρεψε σωστή μορφή δεδομένων. Δοκίμασε πιο καθαρό κείμενο."}), 500
+            
+        menu_items = json.loads(match.group())
 
-    prompt = "Analyze this menu photo. Return ONLY a JSON array with 'name', 'price', 'category'. No extra text."
-
-    payload = {
-        "contents": [{
-            "parts": [
-                {"text": prompt},
-                {"inline_data": {"mime_type": "image/jpeg", "data": img_str}}
-            ]
-        }]
-    }
+        conn = sqlite3.connect('orders.db')
+        c = conn.cursor()
+        for item in menu_items:
+            # Μετατροπή τιμής σε αριθμό (χειρισμός κόμματος/τελείας)
+            val = str(item['price']).replace('€','').replace(',','.').strip()
+            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
+                      (item['name'], float(val), item['category']))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "items_added": len(menu_items)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     try:
         resp = requests.post(URL, json=payload)
@@ -204,6 +192,7 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
