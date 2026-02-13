@@ -72,14 +72,15 @@ def chat():
         "ORDER_JSON {\"items\": [{\"name\": \"Τοστ\", \"price\": 4.0}], \"total\": 4.0, \"umbrella\": \""+umbrella_fixed+"\"}"
     )
 
-   try:
+    try:
+        # Εδώ η εσοχή διορθώθηκε
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
-        result = resp.json() # Ορίζουμε το result
+        result = resp.json() 
         
         if 'candidates' in result and len(result['candidates']) > 0:
             ai_reply = result['candidates'][0]['content']['parts'][0]['text']
             
-            # 1. ΠΡΩΤΑ ελέγχουμε για παραγγελία και σώζουμε στη βάση
+            # 1. Έλεγχος για παραγγελία
             if "ORDER_JSON" in ai_reply:
                 try:
                     match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
@@ -90,10 +91,8 @@ def chat():
                 except Exception as e:
                     print(f"Error saving order: {e}")
             
-            # 2. ΜΕΤΑ καθαρίζουμε την απάντηση
+            # 2. Καθαρισμός απάντησης
             clean_reply = ai_reply.split("ORDER_JSON")[0].strip()
-            
-            # 3. ΤΕΛΕΥΤΑΙΟ το return για να προλάβει να τρέξει ο παραπάνω κώδικας
             return jsonify({"reply": clean_reply})
         else:
             return jsonify({"reply": "Το AI δεν έδωσε απάντηση."})
@@ -184,6 +183,7 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
 
