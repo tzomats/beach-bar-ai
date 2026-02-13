@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # --- ΡΥΘΜΙΣΕΙΣ ---
 API_KEY = "AIzaSyDi3MgwXvAqda1APnSHHT6uYl5ZrNF-ymU"
-MODEL = "gemini-1.5-flash" 
+MODEL = "gemini-3-flash-preview" 
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
 def init_db():
@@ -118,3 +118,4 @@ def chat():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
+
