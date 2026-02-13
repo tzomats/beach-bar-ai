@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 # --- ΡΥΘΜΙΣΕΙΣ ---
 API_KEY = "AIzaSyDi3MgwXvAqda1APnSHHT6uYl5ZrNF-ymU"
-MODEL = "gemini-3-pro-preview" # To 3-flash-preview είναι ασταθές, το 1.5-flash είναι το standard πλέον
+MODEL = "gemini-3-flash-preview" # To 3-flash-preview είναι ασταθές, το 1.5-flash είναι το standard πλέον
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
 def init_db():
@@ -156,4 +156,5 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
