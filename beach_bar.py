@@ -65,12 +65,31 @@ def chat():
     else:
         menu_context = "ΚΑΤΑΛΟΓΟΣ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in rows])
     
-    system_prompt = f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. Απάντα σύντομα."
+    system_prompt = (
+        f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. "
+        "Απάντησε σύντομα. ΑΝ Ο ΠΕΛΑΤΗΣ ΠΑΡΑΓΓΕΙΛΕΙ, πρέπει ΟΠΩΣΔΗΠΟΤΕ στο τέλος της απάντησής σου "
+        "να γράψεις τη λέξη ORDER_JSON και μετά τα στοιχεία σε JSON μορφή, π.χ.: "
+        "ORDER_JSON {\"items\": [{\"name\": \"Τοστ\", \"price\": 4.0}], \"total\": 4.0, \"umbrella\": \""+umbrella_fixed+"\"}"
+    )
 
     try:
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
         ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
         return jsonify({"reply": ai_reply})
+        if 'candidates' in result and len(result['candidates']) > 0:
+            ai_reply = result['candidates'][0]['content']['parts'][0]['text']
+            
+            # ΕΔΩ ΕΙΝΑΙ ΤΟ ΚΛΕΙΔΙ: Αν η απάντηση περιέχει παραγγελία, βάλτη στη βάση orders
+            if "ORDER_JSON" in ai_reply:
+                try:
+                    # Βρίσκουμε το JSON κομμάτι
+                    json_part = re.search(r'\{.*\}', ai_reply, re.DOTALL).group()
+                    c.execute("INSERT INTO orders (content) VALUES (?)", (json_part,))
+                    conn.commit()
+                except Exception as e:
+                    print(f"Order Save Error: {e}")
+
+            return jsonify({"reply": ai_reply.split("ORDER_JSON")[0].strip()}) # Στέλνουμε στον πελάτη μόνο τα λόγια
     except:
         return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
     finally:
@@ -156,5 +175,6 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
 
 
