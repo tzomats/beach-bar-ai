@@ -3,15 +3,13 @@ import requests
 import json
 import re
 import sqlite3
-import base64
-from io import BytesIO
-from PIL import Image
+import os
 
 app = Flask(__name__)
 
 # --- ΡΥΘΜΙΣΕΙΣ ---
 API_KEY = "AIzaSyDi3MgwXvAqda1APnSHHT6uYl5ZrNF-ymU"
-MODEL = "gemini-3-flash-preview" # To 3-flash-preview είναι ασταθές, το 1.5-flash είναι το standard πλέον
+MODEL = "gemini-1.5-flash" 
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
 def init_db():
@@ -19,8 +17,6 @@ def init_db():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS orders 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS messages 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, umbrella TEXT, sender TEXT, text TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     c.execute('''CREATE TABLE IF NOT EXISTS menu 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, price REAL NOT NULL, category TEXT)''')
     conn.commit()
@@ -32,49 +28,22 @@ init_db()
 def index():
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    c.execute("SELECT id, content FROM orders ORDER BY id DESC")
+    c.execute("SELECT id, content, timestamp FROM orders ORDER BY id DESC")
     rows = c.fetchall()
     conn.close()
+    
     beach_orders_list = []
     for row in rows:
         try:
-            order = json.loads(row[1])
-            order['id'] = row[0]
-            beach_orders_list.append(order)
-        except: continue
+            # Μετατρέπουμε το κείμενο από τη βάση σε αντικείμενο Python
+            order_data = json.loads(row[1])
+            order_data['id'] = row[0]
+            order_data['timestamp'] = row[2]
+            beach_orders_list.append(order_data)
+        except Exception as e:
+            print(f"Error parsing order {row[0]}: {e}")
+            continue
     return render_template('dashboard.html', data_list=beach_orders_list)
-
-@app.route('/client')
-def client():
-    u_number = request.args.get('u', '??') 
-    return render_template('client.html', umbrella=u_number)
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    data = request.json
-    user_text = data.get('text') or data.get('message') or ""
-    umbrella_fixed = str(data.get('umbrella') or data.get('umbrella_id') or "??")
-    
-    conn = sqlite3.connect('orders.db')
-    c = conn.cursor()
-    c.execute("SELECT name, price FROM menu")
-    rows = c.fetchall()
-    
-    if not rows:
-        menu_context = "Αυτή τη στιγμή δεν έχουμε τίποτα διαθέσιμο."
-    else:
-        menu_context = "ΚΑΤΑΛΟΓΟΣ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in rows])
-    
-    system_prompt = f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. Απάντα σύντομα."
-
-    try:
-        resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
-        ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        return jsonify({"reply": ai_reply})
-    except:
-        return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
-    finally:
-        conn.close()
 
 @app.route('/admin-menu', methods=['GET', 'POST'])
 def admin_menu():
@@ -92,69 +61,60 @@ def admin_menu():
     conn.close()
     return render_template('admin_menu.html', items=items)
 
-@app.route('/delete-menu/<int:item_id>', methods=['POST'])
-def delete_menu(item_id):
-    conn = sqlite3.connect('orders.db')
-    c = conn.cursor()
-    c.execute("DELETE FROM menu WHERE id = ?", (item_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "success"})
-
 @app.route('/upload-menu-text', methods=['POST'])
 def upload_menu_text():
     data = request.json
     raw_text = data.get('text', '')
-    if not raw_text: 
-        return jsonify({"error": "Το κείμενο είναι κενό"}), 400
-        
-    prompt = (
-        "Ανάλυσε το παρακάτω κείμενο και βρες τα προϊόντα. "
-        "Επέστρεψε ΜΟΝΟ ένα JSON array με κλειδιά 'name', 'price', 'category'. "
-        "Μην γράψεις κανένα άλλο σχόλιο. Μόνο το JSON σε αγκύλες [ ]. "
-        "Κείμενο: " + raw_text
-    )
-
+    prompt = f"Μετάτρεψε αυτό σε JSON array με name, price, category: {raw_text}"
     try:
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": prompt}]}]})
         ai_data = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        
-        # Καθαρισμός για να βρούμε μόνο το JSON
         match = re.search(r'\[.*\]', ai_data, re.DOTALL)
-        
         if match:
-            clean_json = match.group()
-            menu_items = json.loads(clean_json)
-
+            items = json.loads(match.group())
             conn = sqlite3.connect('orders.db')
             c = conn.cursor()
-            for item in menu_items:
-                try:
-                    p_raw = str(item.get('price')).replace('€', '').replace(',', '.').strip()
-                    price_val = float(p_raw)
-                    c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", 
-                              (item.get('name'), price_val, item.get('category', 'Γενικά')))
-                except: continue
-            
+            for i in items:
+                p = str(i.get('price', 0)).replace(',', '.')
+                c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (i.get('name'), float(p), i.get('category')))
             conn.commit()
             conn.close()
-            return jsonify({"status": "success", "items_added": len(menu_items)})
-        else:
-            return jsonify({"error": "Δεν βρέθηκε έγκυρο JSON στην απάντηση του AI"}), 500
-            
+            return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/delete/<int:order_id>', methods=['POST'])
-def delete_order(order_id):
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    user_text = data.get('text') or ""
+    umbrella = data.get('umbrella', '7')
+    
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    c.execute("DELETE FROM orders WHERE id = ?", (order_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"status": "success"})
+    c.execute("SELECT name, price FROM menu")
+    rows = c.fetchall()
+    menu_txt = "\n".join([f"{r[0]}: {r[1]}€" for r in rows])
+    
+    prompt = f"Είσαι σερβιτόρος στην ομπρέλα {umbrella}. ΜΕΝΟΥ: {menu_txt}. Αν παραγγείλουν, γράψε ORDER_JSON {{'items': [{{'name': '...', 'price': ...}}], 'total': ..., 'umbrella': '{umbrella}'}}"
+
+    try:
+        resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{prompt}\nΠελάτης: {user_text}"}]}]})
+        ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        
+        if "ORDER_JSON" in ai_reply:
+            match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
+            if match:
+                # Αποθηκεύουμε ως έγκυρο JSON για να το διαβάζει το Ιστορικό
+                order_json = match.group().replace("'", '"') 
+                c.execute("INSERT INTO orders (content) VALUES (?)", (order_json,))
+                conn.commit()
+        
+        return jsonify({"reply": ai_reply.split("ORDER_JSON")[0].strip()})
+    except Exception as e:
+        return jsonify({"reply": "Σφάλμα"}), 500
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
-	
-	# --- (αυτος ο κωδικας δουλευει) καταχωρισει προιωντος με Αι - δεν δειχνει ιστορικο  ---
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
