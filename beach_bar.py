@@ -55,44 +55,55 @@ def chat():
     user_text = data.get('text', '')
     umbrella_fixed = str(data.get('umbrella', '??'))
     
-    # 1. ΦΟΡΤΩΝΟΥΜΕ ΤΟ ΜΕΝΟΥ ΑΠΟ ΤΗ ΒΑΣΗ
     conn = sqlite3.connect('orders.db')
     c = conn.cursor()
-    c.execute("SELECT name, price, category FROM menu")
+    
+    # Φόρτωση Μενού για να ξέρει το AI τι πουλάμε
+    c.execute("SELECT name, price FROM menu")
     menu_rows = c.fetchall()
+    menu_context = "ΜΕΝΟΥ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in menu_rows])
     
-    menu_context = "ΤΟ ΜΕΝΟΥ ΜΑΣ:\n"
-    for item in menu_rows:
-        menu_context += f"- {item[0]} ({item[2]}): {item[1]}€\n"
-    
-    # Αποθήκευση μηνύματος πελάτη
-    c.execute("INSERT INTO messages (umbrella, sender, text) VALUES (?, ?, ?)", (umbrella_fixed, 'Πελάτης', user_text))
-    
-    # 2. ΟΔΗΓΙΕΣ ΣΤΟ AI (SYSTEM PROMPT)
+    # Οδηγίες για το Gemini 3
     system_instruction = (
-        f"Είσαι σερβιτόρος στην ΟΜΠΡΕΛΑ {umbrella_fixed}. "
-        f"Χρησιμοποίησε ΑΥΤΟ ΤΟ ΜΕΝΟΥ: {menu_context}. "
-        "Απάντησε σύντομα. Κατάλαβε Greeklish και ορθογραφικά. "
-        "Αν ο πελάτης παραγγείλει, γράψε ΟΠΩΣΔΗΠΟΤΕ ORDER_JSON και μετά το JSON: "
-        "{\"umbrella_number\": \"" + umbrella_fixed + "\", \"products_list\": [{\"name\": \"...\", \"qty\": 1}]}"
+        f"Είσαι ο σερβιτόρος στην ομπρέλα {umbrella_fixed}. "
+        f"Χρησιμοποίησε ΑΠΟΚΛΕΙΣΤΙΚΑ αυτό το μενού: {menu_context}. "
+        "Απάντησε σύντομα. Αν παραγγείλουν, δώσε ORDER_JSON στο τέλος."
     )
-    
+
+    payload = {
+        "contents": [{"parts": [{"text": f"{system_instruction}\nΠελάτης: {user_text}"}]}]
+    }
+
     try:
-        resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_instruction}\nΠελάτης: {user_text}"}]}]})
-        ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
-        
-        clean_ai_text = ai_reply.split("ORDER_JSON")[0].strip()
-        c.execute("INSERT INTO messages (umbrella, sender, text) VALUES (?, ?, ?)", (umbrella_fixed, 'AI', clean_ai_text))
-        
-        if "ORDER_JSON" in ai_reply:
-            json_str = re.search(r'\{.*\}', ai_reply, re.DOTALL).group()
-            c.execute("INSERT INTO orders (content) VALUES (?)", (json_str,))
+        resp = requests.post(URL, json=payload)
+        result = resp.json()
+
+        # Έλεγχος αν η Google έστειλε απάντηση
+        if 'candidates' in result and len(result['candidates']) > 0:
+            ai_reply = result['candidates'][0]['content']['parts'][0]['text']
             
-        conn.commit()
-        conn.close()
-        return jsonify({"reply": clean_ai_text})
+            # Αποθήκευση στη βάση
+            c.execute("INSERT INTO messages (umbrella, sender, text) VALUES (?, ?, ?)", (umbrella_fixed, 'Πελάτης', user_text))
+            c.execute("INSERT INTO messages (umbrella, sender, text) VALUES (?, ?, ?)", (umbrella_fixed, 'AI', ai_reply))
+            
+            # Αν υπάρχει παραγγελία, βάλτη στον πίνακα orders
+            if "ORDER_JSON" in ai_reply:
+                json_match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
+                if json_match:
+                    c.execute("INSERT INTO orders (content) VALUES (?)", (json_match.group(),))
+            
+            conn.commit()
+            return jsonify({"reply": ai_reply})
+        else:
+            # Εδώ βλέπουμε τι φταίει αν δεν δουλεύει
+            print("Full API Error:", result)
+            return jsonify({"reply": "Το AI δεν απάντησε. Δοκίμασε ξανά σε λίγο."})
+
     except Exception as e:
-        return jsonify({"reply": f"Σφάλμα AI: {str(e)}"})
+        print(f"Connection Error: {e}")
+        return jsonify({"reply": "Πρόβλημα σύνδεσης."})
+    finally:
+        conn.close()
 
 @app.route('/admin-menu', methods=['GET', 'POST'])
 def admin_menu():
@@ -193,3 +204,4 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
+
