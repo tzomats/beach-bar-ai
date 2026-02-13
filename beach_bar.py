@@ -65,43 +65,32 @@ def chat():
     else:
         menu_context = "ΚΑΤΑΛΟΓΟΣ:\n" + "\n".join([f"- {r[0]}: {r[1]}€" for r in rows])
     
-    system_prompt = (
-        f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. "
-        "Απάντησε σύντομα. ΑΝ Ο ΠΕΛΑΤΗΣ ΠΑΡΑΓΓΕΙΛΕΙ, πρέπει ΟΠΩΣΔΗΠΟΤΕ στο τέλος της απάντησής σου "
-        "να γράψεις τη λέξη ORDER_JSON και μετά τα στοιχεία σε JSON μορφή, π.χ.: "
-        "ORDER_JSON {\"items\": [{\"name\": \"Τοστ\", \"price\": 4.0}], \"total\": 4.0, \"umbrella\": \""+umbrella_fixed+"\"}"
-    )
+    system_prompt = f"Είσαι σερβιτόρος στην ομπρέλα {umbrella_fixed}. ΜΕΝΟΥ: {menu_context}. Απάντα σύντομα."
 
     try:
-        # Εδώ η εσοχή διορθώθηκε
         resp = requests.post(URL, json={"contents": [{"parts": [{"text": f"{system_prompt}\nΠελάτης: {user_text}"}]}]})
-        result = resp.json() 
-        
-        if 'candidates' in result and len(result['candidates']) > 0:
-            ai_reply = result['candidates'][0]['content']['parts'][0]['text']
-            
-            # 1. Έλεγχος για παραγγελία
-            if "ORDER_JSON" in ai_reply:
-                try:
-                    match = re.search(r'\{.*\}', ai_reply, re.DOTALL)
-                    if match:
-                        order_data = match.group()
-                        c.execute("INSERT INTO orders (content) VALUES (?)", (order_data,))
-                        conn.commit()
-                except Exception as e:
-                    print(f"Error saving order: {e}")
-            
-            # 2. Καθαρισμός απάντησης
-            clean_reply = ai_reply.split("ORDER_JSON")[0].strip()
-            return jsonify({"reply": clean_reply})
-        else:
-            return jsonify({"reply": "Το AI δεν έδωσε απάντηση."})
-            
-    except Exception as e:
-        print(f"General Error: {e}")
+        ai_reply = resp.json()['candidates'][0]['content']['parts'][0]['text']
+        return jsonify({"reply": ai_reply})
+    except:
         return jsonify({"reply": "Σφάλμα AI. Δοκίμασε πάλι."})
     finally:
         conn.close()
+
+@app.route('/admin-menu', methods=['GET', 'POST'])
+def admin_menu():
+    conn = sqlite3.connect('orders.db')
+    c = conn.cursor()
+    if request.method == 'POST':
+        name = request.form.get('name')
+        price = request.form.get('price')
+        category = request.form.get('category')
+        if name and price:
+            c.execute("INSERT INTO menu (name, price, category) VALUES (?, ?, ?)", (name, price, category))
+            conn.commit()
+    c.execute("SELECT id, name, price, category FROM menu ORDER BY category")
+    items = c.fetchall()
+    conn.close()
+    return render_template('admin_menu.html', items=items)
 
 @app.route('/delete-menu/<int:item_id>', methods=['POST'])
 def delete_menu(item_id):
@@ -167,11 +156,5 @@ def delete_order(order_id):
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
-
-
-
-
-
-
-
-
+	
+	# --- (αυτος ο κωδικας δουλευει) καταχωρισει προιωντος με Αι - δεν δειχνει ιστορικο  ---
